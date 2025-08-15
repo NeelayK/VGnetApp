@@ -22,7 +22,7 @@ export default function SplashScreen({ loading = false, duration = 2000, onDone 
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <Image source={require('../assets/images/adaptive-icon.png')} style={styles.logo} />
+      <Image source={require('../assets/splash-icon.png')} style={styles.logo} />
       {loading && (
         <View style={styles.loaderWrapper}>
           <ActivityIndicator size="small" color="blue" />

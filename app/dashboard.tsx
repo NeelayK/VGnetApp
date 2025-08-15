@@ -7,16 +7,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from 'react-native';
+import QRScanScreen from '../lib/qr_scan';
 import { supabase } from '../lib/supabase';
 import HistoryScreen from './history';
 
-
 type Role = 'admin' | 'student' | 'visiting';
 
-const LOGGABLE_DOORS = ['Main Door', 'Workshop Door'];
-const ADMIN_ONLY_DOORS = ['Admin Door'];
+const MAIN_DOOR = 'Main Door';
+const OTHER_DOORS = ['Discussion Room', 'Workshop Room'];
 const FAN_ZONES = ['Computer Room', 'Workshop Room'];
 
 const COMMANDS = [
@@ -31,8 +32,11 @@ export default function Dashboard() {
   const [role, setRole] = useState<Role | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [song, setSong] = useState('');
   const [activeCommand, setActiveCommand] = useState('doors');
+
+  const [scanning, setScanning] = useState<'user' | 'visitor' | null>(null);
+  const [visitorName, setVisitorName] = useState('');
+  const [openTime, setOpenTime] = useState('10');
 
   useEffect(() => {
     const getUserProfile = async () => {
@@ -61,13 +65,11 @@ export default function Dashboard() {
   const logAction = async (action: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     await supabase.from('history').insert({
       user_id: user.id,
       name: name,
       request_name: action
     });
-
     Alert.alert('Success', `Action: ${action}`);
   };
 
@@ -79,7 +81,7 @@ export default function Dashboard() {
   if (loading) return null;
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.page}>
         
@@ -91,13 +93,8 @@ export default function Dashboard() {
           </Pressable>
         </View>
 
-        {/* Scrollable Command Menu */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.commandScroll}
-          contentContainerStyle={styles.commandRow}
-        >
+        {/* Command Menu */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.commandScroll} contentContainerStyle={styles.commandRow}>
           {COMMANDS.map(cmd => (
             <Pressable
               key={cmd.key}
@@ -124,26 +121,76 @@ export default function Dashboard() {
           ))}
         </ScrollView>
 
-        {/* Active Command Content */}
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           {activeCommand === 'doors' && (
             <>
-              {[...LOGGABLE_DOORS, ...(role === 'admin' ? ADMIN_ONLY_DOORS : [])].map((door) => (
+              {/* QR Scanner */}
+              {scanning ? (
+                <QRScanScreen
+                  onDone={() => setScanning(null)}
+                  onScanComplete={(door) => {
+                    if (door === MAIN_DOOR && scanning === 'user') {
+                      logAction(`QR Scan: ${door}`);
+                    } else if (door === MAIN_DOOR && scanning === 'visitor') {
+                      logAction(`Visitor: ${visitorName} — Allowed by ${name}`);
+                      setVisitorName('');
+                    } else if (OTHER_DOORS.includes(door)) {
+                      logAction(`QR Scan: ${door}`);
+                    }
+                    setScanning(null);
+                  }}
+                />
+              ) : (
+                <View style={styles.card}>
+                  <Text style={styles.label}>Scan Doors</Text>
+                  <Pressable style={styles.button} onPress={() => setScanning('user')}>
+                    <Text style={styles.buttonText}>Scan as User</Text>
+                  </Pressable>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Visitor Name"
+                    value={visitorName}
+                    onChangeText={setVisitorName}
+                  />
+                  <Pressable
+                    style={[styles.button, { marginTop: 8 }]}
+                    disabled={!visitorName.trim()}
+                    onPress={() => setScanning('visitor')}
+                  >
+                    <Text style={styles.buttonText}>Scan for Visitor</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Main Door - Admin Only */}
+              {role === 'admin' && (
+                <View style={styles.card}>
+                  <Text style={styles.label}>{MAIN_DOOR}</Text>
+                  <View style={styles.buttonRow}>
+                    <Pressable style={styles.button} onPress={() => logAction(`${MAIN_DOOR} Always On`)}>
+                      <Text style={styles.buttonText}>Always On</Text>
+                    </Pressable>
+                    <Pressable style={styles.button} onPress={() => logAction(`${MAIN_DOOR} Always Off`)}>
+                      <Text style={styles.buttonText}>Always Off</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
+              {/* Other Doors */}
+              {OTHER_DOORS.map(door => (
                 <View key={door} style={styles.card}>
                   <Text style={styles.label}>{door}</Text>
-                  <View style={styles.buttonRow}>
-                    {role === 'admin' && (
-                      <>
-                        <Pressable style={styles.button} onPress={() => logAction(`${door} Always On`)}>
-                          <Text style={styles.buttonText}>Always On</Text>
-                        </Pressable>
-                        <Pressable style={styles.button} onPress={() => logAction(`${door} Always Off`)}>
-                          <Text style={styles.buttonText}>Always Off</Text>
-                        </Pressable>
-                      </>
-                    )}
-                    <Pressable style={styles.button} onPress={() => logAction(`${door} Temporary Open`)}>
-                      <Text style={styles.buttonText}>Open (10s)</Text>
+                  <View style={styles.timeRow}>
+                    <TextInput
+                      style={styles.inputSmall}
+                      placeholder="Seconds"
+                      value={openTime}
+                      onChangeText={setOpenTime}
+                      keyboardType="numeric"
+                    />
+                    <Pressable style={styles.button} onPress={() => Alert.alert(`Opening ${door} for ${openTime}s`)}>
+                      <Text style={styles.buttonText}>Open</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -174,15 +221,10 @@ export default function Dashboard() {
             </View>
           )}
 
-{activeCommand === 'logs' && (
-  <View style={styles.card}>
-    <HistoryScreen />
-  </View>
-)}
-
+          {activeCommand === 'logs' && <HistoryScreen />}
         </ScrollView>
       </View>
-    </>
+    </View>
   );
 }
 
@@ -193,91 +235,21 @@ const colors = {
 };
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: colors.light,
-    paddingTop: 50,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 10
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.dark
-  },
-  logout: {
-    color: colors.red,
-    fontWeight: 'bold',
-    borderWidth: 2,
-    borderColor: colors.red,
-    padding: 8,
-    borderRadius: 12
-  },
-  commandScroll: {
-    maxHeight: 100
-  },
-  commandRow: {
-    paddingHorizontal: 10,
-    gap: 10
-  },
-  commandItem: {
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'white',
-    width: 90
-  },
-  commandActive: {
-    backgroundColor: colors.red
-  },
-  commandLabel: {
-    fontSize: 12,
-    marginTop: 4,
-    color: colors.dark,
-    textAlign: 'center'
-  },
-  card: {
-    padding: 15,
-    margin: 10,
-    backgroundColor: 'white',
-    borderRadius: 12
-  },
-  label: {
-    fontSize: 16,
-    textAlign: 'center',
-    fontWeight: '600',
-    marginBottom: 10
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center'
-
-  },
-  button: {
-    backgroundColor: colors.red,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    minWidth: 100,
-    alignItems: 'center'
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: '600'
-  },
-  input: {
-    backgroundColor: '#eee',
-    borderRadius: 12,
-    padding: 10,
-    fontSize: 16,
-    width: '100%',
-    marginBottom: 10
-  }
+  page: { flex: 1, backgroundColor: colors.light, paddingTop: 50 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
+  greeting: { fontSize: 22, fontWeight: '700', color: colors.dark },
+  logout: { color: colors.red, fontWeight: 'bold', borderWidth: 2, borderColor: colors.red, padding: 8, borderRadius: 12 },
+  commandScroll: { maxHeight: 100 },
+  commandRow: { paddingHorizontal: 10, gap: 10 },
+  commandItem: { alignItems: 'center', padding: 10, borderRadius: 10, backgroundColor: 'white', width: 90 },
+  commandActive: { backgroundColor: colors.red },
+  commandLabel: { fontSize: 12, marginTop: 4, color: colors.dark, textAlign: 'center' },
+  card: { padding: 15, margin: 10, backgroundColor: 'white', borderRadius: 12 },
+  label: { fontSize: 16, textAlign: 'center', fontWeight: '600', marginBottom: 10 },
+  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  button: { backgroundColor: colors.red, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, minWidth: 100, alignItems: 'center' },
+  buttonText: { color: 'white', fontWeight: '600' },
+  input: { backgroundColor: '#eee', padding: 10, borderRadius: 8, marginTop: 8 },
+  inputSmall: { backgroundColor: '#eee', padding: 8, borderRadius: 8, width: 80, textAlign: 'center', marginRight: 8 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }
 });
