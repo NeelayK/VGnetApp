@@ -22,7 +22,6 @@
     "orientation": "portrait",
     "icon": "./assets/splash-icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -30,13 +29,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "permissions": [
-        "CAMERA",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
-      ]
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to allow users to capture photos or scan QR codes.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload and share images.",
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone for video/audio features."
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

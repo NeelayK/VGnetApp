@@ -1,6 +1,5 @@
-import { Button, Input } from '@rneui/themed'
 import React, { useState } from 'react'
-import { Alert, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { supabase } from '../lib/supabase'
 
 export default function Auth() {
@@ -11,10 +10,9 @@ export default function Auth() {
   async function signInWithEmail() {
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email,
+      password,
     })
-
     if (error) Alert.alert(error.message)
     setLoading(false)
   }
@@ -25,8 +23,8 @@ export default function Auth() {
       data: { session },
       error,
     } = await supabase.auth.signUp({
-      email: email,
-      password: password,
+      email,
+      password,
     })
 
     if (error) Alert.alert(error.message)
@@ -37,31 +35,44 @@ export default function Auth() {
   return (
     <View style={styles.container}>
       <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Input
-          label="Email"
-          leftIcon={{ type: 'font-awesome', name: 'envelope' }}
-          onChangeText={(text) => setEmail(text)}
-          value={email}
+        <Text style={styles.label}>Email</Text>
+        <TextInput
+          style={styles.input}
           placeholder="email@address.com"
-          autoCapitalize={'none'}
+          onChangeText={setEmail}
+          value={email}
+          autoCapitalize="none"
+          keyboardType="email-address"
         />
       </View>
       <View style={styles.verticallySpaced}>
-        <Input
-          label="Password"
-          leftIcon={{ type: 'font-awesome', name: 'lock' }}
-          onChangeText={(text) => setPassword(text)}
-          value={password}
-          secureTextEntry={true}
+        <Text style={styles.label}>Password</Text>
+        <TextInput
+          style={styles.input}
           placeholder="Password"
-          autoCapitalize={'none'}
+          onChangeText={setPassword}
+          value={password}
+          secureTextEntry
+          autoCapitalize="none"
         />
       </View>
       <View style={[styles.verticallySpaced, styles.mt20]}>
-        <Button title="Sign in" disabled={loading} onPress={() => signInWithEmail()} />
+        <Pressable
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={signInWithEmail}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
+        </Pressable>
       </View>
       <View style={styles.verticallySpaced}>
-        <Button title="Sign up" disabled={loading} onPress={() => signUpWithEmail()} />
+        <Pressable
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={signUpWithEmail}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
+        </Pressable>
       </View>
     </View>
   )
@@ -79,5 +90,31 @@ const styles = StyleSheet.create({
   },
   mt20: {
     marginTop: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 })
