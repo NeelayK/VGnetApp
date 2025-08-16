@@ -12,13 +12,14 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@rneui/themed": "^4.0.0-rc.8",
     "@supabase/supabase-js": "^2.55.0",
+    "axios": "^1.11.0",
     "expo": "~53.0.20",
+    "expo-camera": "~16.1.11",
     "expo-router": "^5.1.4",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-native": "0.79.5",
-    "react-native-url-polyfill": "^2.0.0",
-    "expo-camera": "~16.1.11"
+    "react-native-url-polyfill": "^2.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

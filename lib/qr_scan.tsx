@@ -1,10 +1,17 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { sendCommand } from './api';
 
-export default function QRScanScreen({ onDone, onScanComplete }) {
+export default function QRScanScreen({ onDone, scanMode, visitorName }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+
+  const doorMap: Record<string, string> = {
+    'Main Door': 'main_door',
+    'Workshop Room': 'workshop_room',
+    'Discussion Room': 'discussion_room'
+  };
 
   useEffect(() => {
     if (!permission) requestPermission();
@@ -12,21 +19,32 @@ export default function QRScanScreen({ onDone, onScanComplete }) {
 
   const resetScan = () => setScanned(false);
 
-  const handleBarCodeScanned = ({ data }) => {
+  const handleBarCodeScanned = async ({ data }) => {
     if (scanned) return;
     setScanned(true);
 
-    const door = data.trim();
-    const validDoors = ['Main Door', 'Workshop Room', 'Discussion Room'];
+    const scannedDoor = data.trim();
+    const deviceKey = doorMap[scannedDoor];
 
-    if (!validDoors.map(d => d.toLowerCase()).includes(door.toLowerCase())) {
-      Alert.alert('Invalid QR', `Door "${door}" not recognized.`);
+    if (!deviceKey) {
+      Alert.alert('Invalid QR', `Door "${scannedDoor}" not recognized.`);
       setTimeout(resetScan, 2500);
       return;
     }
 
-    // Send door name to parent
-    onScanComplete(door);
+    try {
+      if (scanMode === 'user') {
+        await sendCommand(deviceKey, 'open');
+      } else if (scanMode === 'visitor') {
+        await sendCommand(deviceKey, 'open', visitorName?.trim());
+      }
+      Alert.alert('Scan Complete', `${scannedDoor} → Access Granted`);
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Could not process scan.');
+    }
+
+    setTimeout(resetScan, 2000);
   };
 
   if (!permission) {
@@ -57,12 +75,10 @@ export default function QRScanScreen({ onDone, onScanComplete }) {
 
   return (
     <View style={styles.container}>
-      {/* Back Button */}
       <Pressable style={styles.backButton} onPress={onDone}>
         <Text style={styles.backButtonText}>← Back</Text>
       </Pressable>
 
-      {/* Camera View */}
       <View style={styles.cameraWrapper}>
         <CameraView
           style={styles.camera}
@@ -72,10 +88,8 @@ export default function QRScanScreen({ onDone, onScanComplete }) {
         />
       </View>
 
-      {/* Hint */}
       <Text style={styles.hint}>Align the QR code inside the box</Text>
 
-      {/* Scan Again Button */}
       {scanned && (
         <Pressable style={styles.button} onPress={resetScan}>
           <Text style={styles.buttonText}>Scan Again</Text>

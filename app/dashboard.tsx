@@ -20,9 +20,15 @@ const MAIN_DOOR = 'Main Door';
 const OTHER_DOORS = ['Discussion Room', 'Workshop Room'];
 const FAN_ZONES = ['Computer Room', 'Workshop Room'];
 
+const ROOMS = [
+  { name: 'Computer Room', devices: ['Fan', 'Light'] },
+  { name: 'Workshop Room', devices: ['Fan', 'Light'] },
+  { name: 'Discussion Room', devices: ['Fan', 'Light'] }
+];
+
 const COMMANDS = [
-  { key: 'doors', label: 'Door Locks', icon: 'door' },
-  { key: 'fans', label: 'Fan Commands', icon: 'fan' },
+  { key: 'doors', label: 'Door Commands', icon: 'door' },
+  { key: 'iot', label: 'IoT Devices', icon: 'home-automation' },
   { key: 'camera', label: 'Camera', icon: 'cctv' },
   { key: 'logs', label: 'Access Logs', icon: 'file-document' }
 ];
@@ -37,6 +43,9 @@ export default function Dashboard() {
   const [scanning, setScanning] = useState<'user' | 'visitor' | null>(null);
   const [visitorName, setVisitorName] = useState('');
   const [openTime, setOpenTime] = useState('10');
+
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
     const getUserProfile = async () => {
@@ -62,6 +71,21 @@ export default function Dashboard() {
     getUserProfile();
   }, []);
 
+  // Real-time notification listener
+  useEffect(() => {
+    const channel = supabase
+      .channel('pi-alerts')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pi_alerts' }, (payload) => {
+        const alertMsg = payload.new.message;
+        setNotifications((prev) => [alertMsg, ...prev]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const logAction = async (action: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -85,12 +109,41 @@ export default function Dashboard() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.page}>
         
-        {/* Greeting */}
+        {/* Header with dropdown */}
         <View style={styles.header}>
           <Text style={styles.greeting}>Hey, {name}</Text>
-          <Pressable onPress={handleLogout}>
-            <Text style={styles.logout}>Logout</Text>
-          </Pressable>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {/* Notification bell */}
+            <Pressable onPress={() => setShowDropdown((prev) => !prev)}>
+              <MaterialCommunityIcons name="bell" size={28} color={colors.dark} />
+              {notifications.length > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{notifications.length}</Text>
+                </View>
+              )}
+            </Pressable>
+
+            {/* Logout */}
+            <Pressable onPress={handleLogout}>
+              <Text style={styles.logout}>Logout</Text>
+            </Pressable>
+          </View>
+
+          {/* Dropdown */}
+          {showDropdown && (
+            <View style={styles.dropdown}>
+              {notifications.length === 0 ? (
+                <Text style={{ padding: 8 }}>No new activity</Text>
+              ) : (
+                notifications.map((note, idx) => (
+                  <Pressable key={idx} style={styles.dropdownItem}>
+                    <Text>{note}</Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          )}
         </View>
 
         {/* Command Menu */}
@@ -121,24 +174,15 @@ export default function Dashboard() {
           ))}
         </ScrollView>
 
+        {/* Content */}
         <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
           {activeCommand === 'doors' && (
             <>
-              {/* QR Scanner */}
               {scanning ? (
                 <QRScanScreen
                   onDone={() => setScanning(null)}
-                  onScanComplete={(door) => {
-                    if (door === MAIN_DOOR && scanning === 'user') {
-                      logAction(`QR Scan: ${door}`);
-                    } else if (door === MAIN_DOOR && scanning === 'visitor') {
-                      logAction(`Visitor: ${visitorName} — Allowed by ${name}`);
-                      setVisitorName('');
-                    } else if (OTHER_DOORS.includes(door)) {
-                      logAction(`QR Scan: ${door}`);
-                    }
-                    setScanning(null);
-                  }}
+                  scanMode={scanning}
+                  visitorName={visitorName}
                 />
               ) : (
                 <View style={styles.card}>
@@ -162,7 +206,6 @@ export default function Dashboard() {
                 </View>
               )}
 
-              {/* Main Door - Admin Only */}
               {role === 'admin' && (
                 <View style={styles.card}>
                   <Text style={styles.label}>{MAIN_DOOR}</Text>
@@ -177,7 +220,6 @@ export default function Dashboard() {
                 </View>
               )}
 
-              {/* Other Doors */}
               {OTHER_DOORS.map(door => (
                 <View key={door} style={styles.card}>
                   <Text style={styles.label}>{door}</Text>
@@ -198,18 +240,20 @@ export default function Dashboard() {
             </>
           )}
 
-          {activeCommand === 'fans' && (
-            FAN_ZONES.map(zone => (
-              <View key={zone} style={styles.card}>
-                <Text style={styles.label}>{zone}</Text>
-                <View style={styles.buttonRow}>
-                  <Pressable style={styles.button} onPress={() => Alert.alert('Fan On', zone)}>
-                    <Text style={styles.buttonText}>On</Text>
-                  </Pressable>
-                  <Pressable style={styles.button} onPress={() => Alert.alert('Fan Off', zone)}>
-                    <Text style={styles.buttonText}>Off</Text>
-                  </Pressable>
-                </View>
+          {activeCommand === 'iot' && (
+            ROOMS.map(room => (
+              <View key={room.name} style={styles.card}>
+                <Text style={styles.label}>{room.name}</Text>
+                {room.devices.map(device => (
+                  <View key={device} style={styles.buttonRow}>
+                    <Pressable style={styles.button} onPress={() => Alert.alert(`${device} On`, room.name)}>
+                      <Text style={styles.buttonText}>{device} On</Text>
+                    </Pressable>
+                    <Pressable style={styles.button} onPress={() => Alert.alert(`${device} Off`, room.name)}>
+                      <Text style={styles.buttonText}>{device} Off</Text>
+                    </Pressable>
+                  </View>
+                ))}
               </View>
             ))
           )}
@@ -236,7 +280,7 @@ const colors = {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.light, paddingTop: 50 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10, position: 'relative' },
   greeting: { fontSize: 22, fontWeight: '700', color: colors.dark },
   logout: { color: colors.red, fontWeight: 'bold', borderWidth: 2, borderColor: colors.red, padding: 8, borderRadius: 12 },
   commandScroll: { maxHeight: 100 },
@@ -251,5 +295,33 @@ const styles = StyleSheet.create({
   buttonText: { color: 'white', fontWeight: '600' },
   input: { backgroundColor: '#eee', padding: 10, borderRadius: 8, marginTop: 8 },
   inputSmall: { backgroundColor: '#eee', padding: 8, borderRadius: 8, width: 80, textAlign: 'center', marginRight: 8 },
-  timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }
+  timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: colors.red,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  badgeText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
+  dropdown: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    width: 200,
+    zIndex: 100,
+  },
+  dropdownItem: {
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  }
 });
